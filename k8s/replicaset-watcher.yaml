@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: replicaset-watcher-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: replicaset-watcher-role
+  namespace: default
+rules:
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: replicaset-watcher-rb
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: replicaset-watcher-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: replicaset-watcher-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: replicaset-watcher-script
+  namespace: default
+data:
+  replicaset-scale-watcher.sh: |
+    #!/bin/bash
+    # ...existing code...
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: replicaset-watcher
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: replicaset-watcher
+  template:
+    metadata:
+      labels:
+        app: replicaset-watcher
+    spec:
+      serviceAccountName: replicaset-watcher-sa
+      containers:
+        - name: watcher
+          image: bitnami/kubectl:latest
+          command: ["/bin/bash", "/scripts/replicaset-scale-watcher.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: replicaset-watcher-script
+            defaultMode: 0755
